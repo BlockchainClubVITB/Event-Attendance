@@ -1,8 +1,10 @@
 "use client";
 import { useRef, useState } from "react";
+import Image from "next/image";
 import { supabase } from "@/lib/supabaseClient";
 import {
   AlertDialog,
+  AlertDialogTrigger,
   AlertDialogContent,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -11,9 +13,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import QRScanner, { type QRScannerRef } from "@/components/QRScanner";
-import QrScanner from 'qr-scanner';
+import QRScanner from "@/components/QRScanner";
 
 export default function Home() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -21,11 +21,7 @@ export default function Home() {
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [cameras, setCameras] = useState<QrScanner.Camera[]>([]);
-  const [selectedCameraId, setSelectedCameraId] = useState<string>("");
-  const qrScannerRef = useRef<QRScannerRef | null>(null);
+  const qrScannerRef = useRef<{ restart: () => void } | null>(null);
 
   const handleScanSuccess = (data: string) => {
     const parts = data.split(" ");
@@ -46,41 +42,7 @@ export default function Home() {
     setIsMessageDialogOpen(true);
   };
 
-  const startCamera = () => {
-    setIsCameraActive(true);
-    if (qrScannerRef.current) {
-      qrScannerRef.current.start();
-    }
-  };
-
-  const stopCamera = () => {
-    setIsCameraActive(false);
-    if (qrScannerRef.current) {
-      qrScannerRef.current.stop();
-    }
-  };
-
-  const handleCamerasDetected = (detectedCameras: QrScanner.Camera[]) => {
-    setCameras(detectedCameras);
-    if (detectedCameras.length > 0 && !selectedCameraId) {
-      // Default to back camera if available, otherwise first camera
-      const backCamera = detectedCameras.find(camera => 
-        camera.label.toLowerCase().includes('back') || 
-        camera.label.toLowerCase().includes('environment')
-      );
-      setSelectedCameraId(backCamera?.id || detectedCameras[0].id);
-    }
-  };
-
-  const handleCameraChange = async (cameraId: string) => {
-    setSelectedCameraId(cameraId);
-    if (qrScannerRef.current && isCameraActive) {
-      await qrScannerRef.current.setCamera(cameraId);
-    }
-  };
-
   const handleConfirm = async () => {
-    setIsLoading(true);
     try {
       const { data, error: selectError } = await supabase
         .from("students")
@@ -112,8 +74,6 @@ export default function Home() {
     } catch (error) {
       console.error("Error updating details:", error);
       setMessage("Failed to update details.");
-    } finally {
-      setIsLoading(false);
     }
     setIsDialogOpen(false);
     setIsMessageDialogOpen(true);
@@ -121,178 +81,168 @@ export default function Home() {
 
   const handleMessageDialogClose = () => {
     setIsMessageDialogOpen(false);
-    if (qrScannerRef.current && isCameraActive) {
+    if (qrScannerRef.current) {
       qrScannerRef.current.restart();
     }
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-900">
-        {/* Header */}
-        <header className="bg-gray-800 border-b border-gray-700">
-          <div className="px-4 py-6">
-            <div className="flex items-center justify-center mb-2">
-              <img 
-                src="/logo.png" 
-                alt="Blockchain Club VITB Logo" 
-                className="w-8 h-8 mr-3"
+    <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
+      {/* Header */}
+      <nav className="bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 p-6 shadow-2xl border-b border-blue-500/20">
+        <div className="container mx-auto flex justify-center items-center">
+          <div className="flex items-center space-x-4">
+            <div className="relative">
+              <Image
+                src="/logo.png"
+                alt="Blockchain Club Logo"
+                width={50}
+                height={50}
+                className="rounded-full ring-2 ring-blue-400/50 shadow-lg"
               />
-              <h1 className="text-xl font-bold text-white">Blockchain Club VITB</h1>
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full animate-pulse"></div>
             </div>
-            <p className="text-center text-gray-300 text-sm">Attendance Checker</p>
+            <div className="text-center">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
+                Blockchain Attendance
+              </h1>
+              <p className="text-blue-300/80 text-sm font-medium">
+                Secure • Decentralized • Immutable
+              </p>
+            </div>
           </div>
-        </header>      {/* Main Content */}
-      <main className="flex-1 px-4 py-6 space-y-6">
-        {/* Camera Section */}
-        <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden max-w-lg mx-auto w-full">
-          <div className="p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
-              <h2 className="text-lg font-semibold text-white">
-                QR Code Scanner
-              </h2>
-              {cameras.length > 1 && (
-                <select
-                  value={selectedCameraId}
-                  onChange={(e) => handleCameraChange(e.target.value)}
-                  className="bg-gray-700 text-white border border-gray-600 rounded px-3 py-1 text-sm"
-                >
-                  {cameras.map((camera) => (
-                    <option key={camera.id} value={camera.id}>
-                      {camera.label || `Camera ${camera.id}`}
-                    </option>
-                  ))}
-                </select>
-              )}
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="flex-grow flex items-center justify-center p-6">
+        <div className="w-full max-w-lg">
+          {/* Scanner Card */}
+          <div className="bg-gradient-to-br from-gray-800/90 via-gray-900/90 to-black/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-blue-500/20 overflow-hidden">
+            {/* Card Header */}
+            <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 p-6 border-b border-blue-500/20">
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  QR Code Scanner
+                </h2>
+                <p className="text-blue-300/80 text-sm">
+                  Scan your student QR code to mark attendance
+                </p>
+              </div>
             </div>
-            {cameras.length === 0 && (
-              <div className="flex flex-col items-center justify-center min-h-[200px]">
-                <p className="text-gray-400 text-center">No camera detected.<br/>Please check your device and browser permissions.</p>
-              </div>
-            )}
-            {cameras.length > 0 && !isCameraActive && (
-              <div className="w-full h-64 sm:h-80 bg-gray-700 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-gray-600">
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-gray-300 text-sm mb-2">Ready to scan QR codes</p>
-                    <p className="text-gray-500 text-xs">Camera is currently off</p>
-                    {cameras.length > 1 && (
-                      <p className="text-gray-500 text-xs mt-1">
-                        {cameras.length} cameras available
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-            {cameras.length > 0 && isCameraActive && (
-              <div className="w-full h-64 sm:h-80 relative rounded-lg overflow-hidden">
+            
+            {/* Scanner Area */}
+            <div className="p-6">
+              <div className="relative aspect-square bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl overflow-hidden border-2 border-dashed border-blue-500/30">
+                {/* Scanner Component */}
                 <QRScanner
                   ref={qrScannerRef}
                   onScanSuccess={handleScanSuccess}
                   onScanError={handleScanError}
-                  onCamerasDetected={handleCamerasDetected}
-                  selectedCameraId={selectedCameraId}
                 />
+                
+                {/* Scanner Overlay */}
+                <div className="absolute inset-0 pointer-events-none">
+                  {/* Corner Brackets */}
+                  <div className="absolute top-4 left-4 w-8 h-8 border-l-3 border-t-3 border-blue-400"></div>
+                  <div className="absolute top-4 right-4 w-8 h-8 border-r-3 border-t-3 border-blue-400"></div>
+                  <div className="absolute bottom-4 left-4 w-8 h-8 border-l-3 border-b-3 border-blue-400"></div>
+                  <div className="absolute bottom-4 right-4 w-8 h-8 border-r-3 border-b-3 border-blue-400"></div>
+                  
+                  {/* Scanning Line Animation */}
+                  <div className="absolute inset-x-4 top-1/2 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-pulse"></div>
+                </div>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Controls Section */}
-        <div className="space-y-4">
-          {!isCameraActive ? (
-            <Button
-              onClick={startCamera}
-              className="w-full bg-green-600 hover:bg-green-700 text-white py-4 text-lg font-medium rounded-lg"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h10a2 2 0 002-2V6a2 2 0 00-2-2H8a2 2 0 00-2 2v6a2 2 0 002 2z" />
-              </svg>
-              Start Taking Attendance
-            </Button>
-          ) : (
-            <Button
-              onClick={stopCamera}
-              className="w-full bg-red-600 hover:bg-red-700 text-white py-4 text-lg font-medium rounded-lg"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h6v4H9z" />
-              </svg>
-              Stop Camera
-            </Button>
-          )}
-          
-          {isCameraActive && (
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-              <div className="flex items-center justify-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-green-400 text-sm font-medium">Camera Active</span>
+              
+              {/* Instructions */}
+              <div className="mt-6 text-center">
+                <p className="text-gray-300 text-sm leading-relaxed">
+                  Position the QR code within the frame above.<br />
+                  <span className="text-blue-400 font-medium">Format:</span> 
+                  <span className="font-mono text-xs bg-gray-800 px-2 py-1 rounded ml-1">
+                    REGNO NAME
+                  </span>
+                </p>
               </div>
-              <p className="text-gray-400 text-xs text-center mt-2">
-                Point camera at QR code to scan
-              </p>
             </div>
-          )}
+          </div>
+          
+          {/* Footer Info */}
+          <div className="mt-6 text-center">
+            <p className="text-gray-500 text-xs">
+              Powered by Blockchain Technology • Secure Attendance Tracking
+            </p>
+          </div>
         </div>
       </main>
 
+      {/* Confirmation Dialog */}
       <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <AlertDialogContent className="bg-gray-800 border-gray-700">
+        <AlertDialogContent className="bg-gradient-to-br from-gray-800 to-gray-900 border border-blue-500/20 text-white">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Confirm Attendance</AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-300">
-              <div className="space-y-2">
-                <p>
-                  <strong className="text-white">Registration Number:</strong> {registrationNumber}
-                </p>
-                <p>
-                  <strong className="text-white">Name:</strong> {name}
-                </p>
+            <AlertDialogTitle className="text-xl font-bold text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+              Confirm Attendance
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-center mt-4">
+              <div className="bg-gray-800/50 rounded-lg p-4 border border-blue-500/20">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 font-medium">Registration:</span>
+                    <span className="text-blue-400 font-mono font-bold">{registrationNumber}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 font-medium">Student:</span>
+                    <span className="text-white font-semibold">{name}</span>
+                  </div>
+                </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="mt-6">
             <AlertDialogCancel 
               onClick={() => setIsDialogOpen(false)}
-              className="bg-gray-700 text-white border-gray-600 hover:bg-gray-600"
+              className="bg-gray-700 hover:bg-gray-600 text-white border-gray-600"
             >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleConfirm}
-              disabled={isLoading}
-              className="bg-green-600 hover:bg-green-700 text-white"
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
             >
-              {isLoading ? "Processing..." : "Confirm"}
+              Confirm Attendance
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Message Dialog */}
       <AlertDialog
         open={isMessageDialogOpen}
         onOpenChange={setIsMessageDialogOpen}
       >
-        <AlertDialogContent className="bg-gray-800 border-gray-700">
+        <AlertDialogContent className="bg-gradient-to-br from-gray-800 to-gray-900 border border-blue-500/20 text-white">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Notification</AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-300">
-              <p>{message}</p>
+            <AlertDialogTitle className="text-xl font-bold text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+              Notification
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-center mt-4">
+              <div className={`rounded-lg p-4 border ${
+                message.includes('successfully') 
+                  ? 'bg-green-900/30 border-green-500/20 text-green-300' 
+                  : message.includes('Already marked')
+                  ? 'bg-yellow-900/30 border-yellow-500/20 text-yellow-300'
+                  : 'bg-red-900/30 border-red-500/20 text-red-300'
+              }`}>
+                <p className="font-medium">{message}</p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="mt-6">
             <AlertDialogAction 
               onClick={handleMessageDialogClose}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white w-full"
             >
-              Ok
+              Continue Scanning
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
