@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import QRScanner from "@/components/QRScanner";
 
-
 export default function Home() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false);
@@ -58,10 +57,17 @@ export default function Home() {
       } else {
         const nameParts = name.split(" ");
         const firstName = nameParts[0];
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+        const lastName =
+          nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
         const { error: insertError } = await supabase
           .from("students")
-          .insert([{ registration_number: registrationNumber, first_name: firstName, last_name: lastName }]);
+          .insert([
+            {
+              registration_number: registrationNumber,
+              first_name: firstName,
+              last_name: lastName,
+            },
+          ]);
         if (insertError) throw insertError;
         setMessage("Attendance marked successfully!");
       }
@@ -84,10 +90,9 @@ export default function Home() {
     <div className="flex flex-col min-h-screen">
       <nav className="bg-blue-600 p-4 text-white">
         <div className="container mx-auto flex justify-center items-center">
-            <div className="flex items-center">
-
+          <div className="flex items-center">
             <h1 className="text-2xl font-bold">Event Attendance</h1>
-            </div>
+          </div>
         </div>
       </nav>
 
@@ -127,7 +132,9 @@ export default function Home() {
             <AlertDialogCancel onClick={() => setIsDialogOpen(false)}>
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirm}>Confirm</AlertDialogAction>
+            <AlertDialogAction onClick={handleConfirm}>
+              Confirm
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -144,7 +151,9 @@ export default function Home() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={handleMessageDialogClose}>Ok</AlertDialogAction>
+            <AlertDialogAction onClick={handleMessageDialogClose}>
+              Ok
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
