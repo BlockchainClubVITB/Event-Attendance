@@ -4,131 +4,103 @@ import QrScanner from 'qr-scanner';
 interface QRScannerProps {
   onScanSuccess: (data: string) => void;
   onScanError: (error: Error) => void;
-  onCamerasDetected?: (cameras: QrScanner.Camera[]) => void;
-  selectedCameraId?: string;
 }
 
-export interface QRScannerRef {
-  start: () => void;
-  stop: () => void;
-  restart: () => void;
-  getCameras: () => Promise<QrScanner.Camera[]>;
-  setCamera: (cameraId: string) => Promise<void>;
-}
-
-
-const QRScanner = forwardRef<QRScannerRef, QRScannerProps>(({ onScanSuccess, onScanError, onCamerasDetected, selectedCameraId }: QRScannerProps, ref) => {
+const QRScanner = forwardRef<unknown, QRScannerProps>(({ onScanSuccess, onScanError }: QRScannerProps, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const qrScannerRef = useRef<QrScanner | null>(null);
-  const [cameras, setCameras] = useState<QrScanner.Camera[]>([]);
-  const [scannerReady, setScannerReady] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Detect cameras on mount
-  useEffect(() => {
-    let isMounted = true;
-    QrScanner.listCameras(true).then((availableCameras) => {
-      if (isMounted) {
-        setCameras(availableCameras);
-        if (onCamerasDetected) onCamerasDetected(availableCameras);
+  useImperativeHandle(ref, () => ({
+    restart: () => {
+      if (qrScannerRef.current) {
+        qrScannerRef.current.stop();
+        qrScannerRef.current.start();
+        setIsScanning(true);
       }
-    }).catch((error) => {
-      console.error('Failed to get cameras:', error);
-    });
-    return () => { isMounted = false; };
-  }, [onCamerasDetected]);
-
-  // Initialize scanner only when a camera is selected and video is ready
-  useEffect(() => {
-    if (!videoRef.current || !selectedCameraId) return;
-    if (qrScannerRef.current) {
-      qrScannerRef.current.destroy();
-      qrScannerRef.current = null;
     }
-    qrScannerRef.current = new QrScanner(
-      videoRef.current,
-      (result) => {
-        onScanSuccess(result.data);
-        qrScannerRef.current?.pause();
-      },
-      {
-        onDecodeError: (error) => {
-          if (error instanceof Error && error.message !== 'No QR code found') {
-            onScanError(error);
-          }
+  }));
+
+  const toggleScanning = () => {
+    if (!qrScannerRef.current) return;
+
+    if (isScanning) {
+      qrScannerRef.current.stop();
+      setIsScanning(false);
+    } else {
+      qrScannerRef.current.start().then(() => {
+        setIsScanning(true);
+      }).catch((err) => {
+        console.error('Failed to start QR scanner:', err);
+        onScanError(new Error('Failed to start camera'));
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (videoRef.current) {
+      qrScannerRef.current = new QrScanner(
+        videoRef.current,
+        (result) => {
+          onScanSuccess(result.data);
+          // Optionally pause scanning after a successful scan
+          qrScannerRef.current?.pause();
         },
-        highlightScanRegion: true,
-        highlightCodeOutline: true,
-        preferredCamera: selectedCameraId,
-      }
-    );
-    setScannerReady(true);
+        {
+          onDecodeError: (error) => {
+            console.log(error);
+            // Only call onScanError for actual errors, not just when no QR code is detected
+            if (error instanceof Error && error.message !== 'No QR code found') {
+              onScanError(error);
+            }
+          },
+          highlightScanRegion: true,
+          highlightCodeOutline: true,
+        }
+      );
+
+      qrScannerRef.current.start().catch((err) => {
+        console.error('Failed to start QR scanner:', err);
+        onScanError(new Error('Failed to start camera'));
+        setIsInitialized(false);
+      }).then(() => {
+        setIsScanning(true);
+        setIsInitialized(true);
+      });
+    }
+
     return () => {
       if (qrScannerRef.current) {
         qrScannerRef.current.destroy();
-        qrScannerRef.current = null;
       }
-      setScannerReady(false);
     };
-  }, [selectedCameraId, onScanSuccess, onScanError]);
-
-  useImperativeHandle(ref, () => ({
-    start: () => {
-      if (qrScannerRef.current && scannerReady) {
-        qrScannerRef.current.start().catch((err) => {
-          let errorMessage = 'Failed to start camera';
-          if (err.message && err.message.includes('https')) {
-            errorMessage = 'Camera requires HTTPS. Please use https://localhost:3000 or deploy to a secure server.';
-          } else if (err.name === 'NotAllowedError') {
-            errorMessage = 'Camera access denied. Please allow camera permissions.';
-          } else if (err.name === 'NotFoundError') {
-            errorMessage = 'No camera found. Please ensure a camera is connected.';
-          }
-          onScanError(new Error(errorMessage));
-        });
-      }
-    },
-    stop: () => {
-      if (qrScannerRef.current && scannerReady) {
-        qrScannerRef.current.stop();
-      }
-    },
-    restart: () => {
-      if (qrScannerRef.current && scannerReady) {
-        qrScannerRef.current.stop();
-        qrScannerRef.current.start();
-      }
-    },
-    getCameras: async () => {
-      return await QrScanner.listCameras(true);
-    },
-    setCamera: async (cameraId: string) => {
-      if (qrScannerRef.current && scannerReady) {
-        await qrScannerRef.current.setCamera(cameraId);
-      }
-    }
-  }), [scannerReady]);
+  }, [onScanSuccess, onScanError]);
 
   return (
-    <div className="relative w-full h-full bg-black rounded-lg overflow-hidden">
-      <video 
-        ref={videoRef} 
-        className="absolute inset-0 w-full h-full object-cover" 
-        playsInline
-        muted
-      />
+    <div className="relative w-full h-full">
+      <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" />
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        {/* Scanning overlay */}
-        <div className="absolute inset-4 border-2 border-green-400 rounded-lg">
-          <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-green-400 rounded-tl-lg"></div>
-          <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-green-400 rounded-tr-lg"></div>
-          <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-green-400 rounded-bl-lg"></div>
-          <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-green-400 rounded-br-lg"></div>
-        </div>
-        <div className="absolute bottom-4 left-4 right-4">
-          <p className="text-white text-sm text-center bg-black bg-opacity-50 rounded px-2 py-1">
-            Position QR code within the frame
-          </p>
-        </div>
+        {!isScanning && isInitialized && (
+          <div className="bg-black/50 text-white px-4 py-2 rounded-lg">
+            Camera Stopped
+          </div>
+        )}
+      </div>
+      
+      {/* Camera Control Button */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 pointer-events-auto">
+        <button
+          onClick={toggleScanning}
+          disabled={!isInitialized}
+          className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+            isScanning
+              ? 'bg-red-600 hover:bg-red-700 text-white'
+              : 'bg-green-600 hover:bg-green-700 text-white'
+          } ${!isInitialized ? 'opacity-50 cursor-not-allowed' : 'shadow-lg hover:shadow-xl'}`}
+        >
+          {isScanning ? '⏸️ Stop Camera' : '▶️ Start Camera'}
+        </button>
       </div>
     </div>
   );
